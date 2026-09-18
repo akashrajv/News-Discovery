@@ -85,18 +85,26 @@ class RelevanceService:
         title: str,
         description: str = None,
         content: str = None,
-        target_entity: str = "All Companies"
+        target_entity: str = "All Companies",
+        keywords: Any = None
     ) -> Dict[str, Any]:
         """
         Calculates Target Relevance Score (0-100%), Business Importance Rating (CRITICAL, HIGH, MEDIUM, LOW),
         Impact Sentiment, and generates an AI importance summary.
-        Supports single entity, comma-separated entities, or 'All Companies'.
+        Scoring is strictly based on the target company and given keywords.
         """
         title_text = (title or "").strip()
         desc_text = (description or "").strip()
         body_text = (content or "").strip()
         full_text = f"{title_text} {desc_text} {body_text}".lower()
         title_lower = title_text.lower()
+
+        # Parse user keywords if provided (list or comma-separated string)
+        parsed_keywords: List[str] = []
+        if isinstance(keywords, list):
+            parsed_keywords = [str(k).strip().lower() for k in keywords if str(k).strip()]
+        elif isinstance(keywords, str) and keywords.strip():
+            parsed_keywords = [k.strip().lower() for k in keywords.split(",") if k.strip()]
 
         # Parse target entities (supports single or comma-separated targets)
         if not target_entity or target_entity.strip().lower() in ["all", "all companies"]:
@@ -109,18 +117,18 @@ class RelevanceService:
             max_relevance = -1.0
             for single_target in target_entities_list:
                 analysis = cls._compute_single_entity_analysis(
-                    title_text, desc_text, body_text, full_text, title_lower, single_target
+                    title_text, desc_text, body_text, full_text, title_lower, single_target, parsed_keywords
                 )
                 if analysis["relevance_score"] > max_relevance:
                     max_relevance = analysis["relevance_score"]
                     best_analysis = analysis
             return best_analysis or cls._compute_single_entity_analysis(
-                title_text, desc_text, body_text, full_text, title_lower, target_entities_list[0]
+                title_text, desc_text, body_text, full_text, title_lower, target_entities_list[0], parsed_keywords
             )
         else:
             single_target = target_entities_list[0] if target_entities_list else "All Companies"
             return cls._compute_single_entity_analysis(
-                title_text, desc_text, body_text, full_text, title_lower, single_target
+                title_text, desc_text, body_text, full_text, title_lower, single_target, parsed_keywords
             )
 
     @classmethod
@@ -131,39 +139,70 @@ class RelevanceService:
         body_text: str,
         full_text: str,
         title_lower: str,
-        target_entity: str
+        target_entity: str,
+        keywords: List[str] = None
     ) -> Dict[str, Any]:
         context = cls.get_company_context(target_entity)
         aliases = context.get("aliases", [])
         core_terms = context.get("core_terms", [])
         company_name = context.get("name", target_entity or "Target Company")
+        keywords = keywords or []
 
         # 1. Target Relevance Score Calculation (0 - 100%)
+        # Based on: (A) Target Company Match + (B) Target Keywords Match
         relevance_score = 0.0
         title_alias_match = False
 
         if not target_entity or target_entity.lower() in ["all", "all companies"]:
-            # If monitoring all companies, evaluate general company mentions
+            # If monitoring all companies, evaluate general company mentions or user keywords
             any_known = any(comp in full_text for comp_key in cls.COMPANY_KNOWLEDGE for comp in cls.COMPANY_KNOWLEDGE[comp_key]["aliases"])
             relevance_score = 85.0 if any_known else 60.0
             title_alias_match = any_known
+
+            if keywords:
+                kw_title = any(kw in title_lower for kw in keywords)
+                kw_body = sum(1 for kw in keywords if kw in full_text)
+                if kw_title:
+                    relevance_score = min(100.0, relevance_score + 15.0)
+                elif kw_body > 0:
+                    relevance_score = min(100.0, relevance_score + 10.0)
         else:
-            # Check title matches (Heavy Weight: up to +60 points)
+            # (A) Target Company Match Component (Up to 60-70 points)
             title_alias_match = any(alias in title_lower for alias in aliases)
             if title_alias_match:
-                relevance_score += 60.0
+                relevance_score += 50.0
+            elif any(alias in full_text for alias in aliases):
+                relevance_score += 30.0
             elif any(term in title_lower for term in core_terms):
-                relevance_score += 35.0
+                relevance_score += 20.0
 
-            # Check description/body matches (up to +30 points)
+            # Additional body company mentions (+10 points)
             body_alias_match_count = sum(1 for alias in aliases if alias in full_text)
-            if body_alias_match_count > 0:
-                relevance_score += min(30.0, body_alias_match_count * 15.0)
+            if body_alias_match_count > 1:
+                relevance_score += min(10.0, (body_alias_match_count - 1) * 5.0)
 
-            # Core terms co-occurrence (+10 points)
-            core_matches = sum(1 for term in core_terms if term in full_text)
-            if core_matches > 0:
-                relevance_score += min(10.0, core_matches * 5.0)
+            # (B) Keywords Match Component (Up to 30-40 points)
+            if keywords:
+                # Custom keywords specified by the user
+                kw_title_matches = sum(1 for kw in keywords if kw in title_lower)
+                kw_body_matches = sum(1 for kw in keywords if kw in full_text)
+
+                if kw_title_matches > 0:
+                    relevance_score += min(25.0, kw_title_matches * 15.0)
+                if kw_body_matches > 0:
+                    relevance_score += min(15.0, kw_body_matches * 5.0)
+            else:
+                # Default domain core terms if no specific custom keywords were given
+                core_title_matches = sum(1 for term in core_terms if term in title_lower)
+                core_matches = sum(1 for term in core_terms if term in full_text)
+                if core_title_matches > 0:
+                    relevance_score += min(20.0, core_title_matches * 10.0)
+                elif core_matches > 0:
+                    relevance_score += min(10.0, core_matches * 5.0)
+
+                # If company itself strongly matches the title, grant baseline prominence
+                if title_alias_match:
+                    relevance_score += 15.0
 
             # Cap at 100%
             relevance_score = min(100.0, round(relevance_score, 1))

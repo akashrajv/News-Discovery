@@ -16,6 +16,7 @@ def test_rss_normalization():
             "title": "  Tata Motors launches EV sedan ",
             "link": "https://example.com/article1?utm_source=rss&utm_medium=feed",
             "summary": "Electric sedan launched in Mumbai.",
+            "author": "Jane Doe",
             "published_parsed": (2026, 9, 10, 12, 0, 0, 3, 253, 0)
         }
     ]
@@ -24,6 +25,7 @@ def test_rss_normalization():
     assert len(normalized) == 1
     art = normalized[0]
     assert art.title == "Tata Motors launches EV sedan"
+    assert art.author == "Jane Doe"
     assert "utm_source" not in art.canonical_url
     assert art.collection_method == "rss"
     assert art.normalized_title == "tata motors launches ev sedan"

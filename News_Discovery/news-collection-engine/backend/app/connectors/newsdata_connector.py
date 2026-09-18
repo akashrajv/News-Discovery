@@ -64,6 +64,11 @@ class NewsDataConnector(BaseAPIConnector):
             else:
                 pub_unavailable = True
 
+            raw_creator = item.get("creator")
+            author = (raw_creator[0] if isinstance(raw_creator, list) and raw_creator else raw_creator) or None
+            if author and isinstance(author, str):
+                author = author.strip()
+
             norm_url = normalize_url(url)
             norm_t = normalize_title(title)
             c_hash = compute_content_hash(title, description)
@@ -73,6 +78,7 @@ class NewsDataConnector(BaseAPIConnector):
                 description=description,
                 content=content,
                 source=source_name,
+                author=author if isinstance(author, str) else None,
                 published_at=published_dt,
                 url=url or f"https://newsdata.io/article/{c_hash}",
                 category=self.source_config.get("category"),

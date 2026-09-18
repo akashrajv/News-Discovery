@@ -11,8 +11,13 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     DEMO_MODE: bool = True
 
-    # Database
+    # Relational Database (SQLAlchemy / SQLite fallback)
     DATABASE_URL: str = "sqlite:///./news_engine.db"
+
+    # MongoDB Configuration (Primary Article Document Store)
+    MONGODB_URL: Optional[str] = None
+    MONGODB_DB_NAME: str = "news_discovery"
+    ARTICLE_STORAGE_BACKEND: str = "both"  # "both", "mongodb", "relational"
 
     # Redis Cache
     REDIS_URL: Optional[str] = None

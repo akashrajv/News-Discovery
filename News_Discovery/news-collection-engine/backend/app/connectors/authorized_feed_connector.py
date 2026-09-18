@@ -74,6 +74,8 @@ class AuthorizedFeedConnector(BaseConnector):
             else:
                 pub_unavailable = True
 
+            author = (item.get("author") or item.get("byline") or "").strip() or None
+
             norm_url = normalize_url(url)
             norm_t = normalize_title(title)
             c_hash = compute_content_hash(title, description)
@@ -83,6 +85,7 @@ class AuthorizedFeedConnector(BaseConnector):
                 description=description,
                 content=content,
                 source=source_name,
+                author=author,
                 published_at=published_dt,
                 url=url or f"https://authorized.feed/article/{c_hash}",
                 category=self.source_config.get("category"),

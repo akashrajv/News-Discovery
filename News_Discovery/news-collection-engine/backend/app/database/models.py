@@ -56,6 +56,7 @@ class ArticleModel(Base):
     description = Column(Text, nullable=True)
     content = Column(Text, nullable=True)
     source = Column(String(128), nullable=False)
+    author = Column(String(256), nullable=True)
     published_at = Column(DateTime, nullable=True, index=True)
     url = Column(String(1024), nullable=False, unique=True, index=True)
     category = Column(String(64), nullable=True, index=True)

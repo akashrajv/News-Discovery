@@ -13,6 +13,7 @@ from app.services.rate_limit_service import RateLimitService
 from app.services.cost_service import CostService
 from app.services.relevance_service import RelevanceService
 from app.utils.text_utils import normalize_url, normalize_title, compute_content_hash, compute_dedup_hash
+from app.database.mongodb import mongo_manager
 from app.utils.logger import get_logger
 
 logger = get_logger("news_engine.scheduler_service")
@@ -194,6 +195,7 @@ class NewsSchedulerService:
                     description=art.description,
                     content=art.content,
                     source=art.source,
+                    author=getattr(art, 'author', None),
                     published_at=art.published_at or datetime.utcnow(),
                     url=url_val,
                     category=art.category or "General",
@@ -217,6 +219,40 @@ class NewsSchedulerService:
                 db.add(db_article)
                 db.flush()
                 inserted += 1
+
+                # Dual-storage: Persist to MongoDB if connected
+                if mongo_manager.is_connected:
+                    try:
+                        mongo_doc = {
+                            "id": str(db_article.id),
+                            "title": db_article.title,
+                            "description": db_article.description,
+                            "content": db_article.content,
+                            "source": db_article.source,
+                            "author": db_article.author,
+                            "published_at": db_article.published_at,
+                            "url": db_article.url,
+                            "category": db_article.category,
+                            "location": db_article.location,
+                            "collection_method": db_article.collection_method,
+                            "collected_at": db_article.collected_at,
+                            "canonical_url": db_article.canonical_url,
+                            "normalized_title": db_article.normalized_title,
+                            "content_hash": db_article.content_hash,
+                            "dedup_hash": db_article.dedup_hash,
+                            "source_id": db_article.source_id,
+                            "target_entity": db_article.target_entity,
+                            "relevance_score": db_article.relevance_score,
+                            "importance_score": db_article.importance_score,
+                            "importance_rating": db_article.importance_rating,
+                            "sentiment_tone": db_article.sentiment_tone,
+                            "ai_summary": db_article.ai_summary,
+                            "image_url": db_article.image_url,
+                        }
+                        mongo_manager.upsert_article(mongo_doc)
+                    except Exception as m_err:
+                        logger.warning(f"MongoDB upsert error in scheduler: {m_err}")
+
             except IntegrityError:
                 db.rollback()
                 duplicates += 1

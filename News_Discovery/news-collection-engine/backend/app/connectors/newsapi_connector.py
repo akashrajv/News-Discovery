@@ -65,6 +65,8 @@ class NewsAPIConnector(BaseAPIConnector):
             else:
                 pub_unavailable = True
 
+            author = (item.get("author") or "").strip() or None
+
             norm_url = normalize_url(url)
             norm_t = normalize_title(title)
             c_hash = compute_content_hash(title, description)
@@ -74,6 +76,7 @@ class NewsAPIConnector(BaseAPIConnector):
                 description=description,
                 content=content,
                 source=source_name,
+                author=author,
                 published_at=published_dt,
                 url=url or f"https://newsapi.org/article/{c_hash}",
                 category=self.source_config.get("category"),

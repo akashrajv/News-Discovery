@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, ExternalLink, Hash, Layers, ArrowUpRight, Terminal, Sparkles, Target, ShieldAlert, TrendingUp } from 'lucide-react';
+import { X, ExternalLink, Hash, Layers, ArrowUpRight, Terminal, Sparkles, Target, ShieldAlert, TrendingUp, User } from 'lucide-react';
 
 export default function ArticleDetailModal({ article, onClose }) {
   if (!article) return null;
@@ -33,8 +33,14 @@ export default function ArticleDetailModal({ article, onClose }) {
                 <ExternalLink className="w-4 h-4 text-slate-400 shrink-0 inline" />
               </a>
             </h3>
-            <p className="text-xs text-slate-500 mt-1 font-mono">
-              Source: <span className="font-bold text-mongo-dark">{article.source}</span>
+            <p className="text-xs text-slate-500 mt-1 font-mono flex flex-wrap items-center gap-3">
+              <span>Source: <span className="font-bold text-mongo-dark">{article.source}</span></span>
+              {article.author && (
+                <span className="flex items-center gap-1">
+                  <User className="w-3 h-3 text-slate-400" />
+                  Author: <span className="font-bold text-mongo-dark">{article.author}</span>
+                </span>
+              )}
             </p>
           </div>
           <button
@@ -114,6 +120,11 @@ export default function ArticleDetailModal({ article, onClose }) {
               <div className="flex justify-between border-b border-slate-800 pb-1">
                 <span className="text-slate-400">_id:</span>
                 <span className="text-mongo-green font-bold">{article.id}</span>
+              </div>
+
+              <div className="flex justify-between border-b border-slate-800 pb-1">
+                <span className="text-slate-400">author:</span>
+                <span className="text-slate-200 font-bold">{article.author || 'N/A (Unspecified)'}</span>
               </div>
 
               <div className="flex justify-between border-b border-slate-800 pb-1 items-center">

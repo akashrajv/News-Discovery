@@ -17,6 +17,7 @@ from app.api.routes_cache import router as cache_router
 from app.api.routes_routing import router as routing_router
 
 from app.services.scheduler_service import scheduler_service
+from app.database.mongodb import mongo_manager
 
 logger = get_logger("news_engine.main")
 
@@ -24,6 +25,12 @@ logger = get_logger("news_engine.main")
 async def lifespan(app: FastAPI):
     logger.info("Initializing database schema & seed default sources...")
     init_db()
+
+    # Connect to MongoDB cluster if configured
+    if settings.MONGODB_URL:
+        logger.info("Connecting to MongoDB cluster...")
+        mongo_manager.connect()
+
     db = SessionLocal()
     try:
         SourceRegistry.initialize_default_sources(db)
@@ -60,6 +67,7 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Shutting down application & scheduler...")
     scheduler_service.shutdown()
+    mongo_manager.close()
 
 app = FastAPI(
     title=settings.APP_NAME,

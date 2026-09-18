@@ -90,6 +90,10 @@ class RSSConnector(BaseConnector):
             else:
                 pub_unavailable = True
 
+            author = entry.get("author") or entry.get("dc:creator") or (entry.get("author_detail") or {}).get("name")
+            if author:
+                author = author.strip()
+
             norm_url = normalize_url(link)
             norm_t = normalize_title(title)
             c_hash = compute_content_hash(title, summary)
@@ -99,6 +103,7 @@ class RSSConnector(BaseConnector):
                 description=summary if summary else None,
                 content=None,  # Do not assume full article content in RSS
                 source=self.source_name,
+                author=author or None,
                 published_at=published_dt,
                 url=link or f"https://rss.feed/{c_hash}",
                 category=self.source_config.get("category"),

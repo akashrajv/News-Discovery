@@ -7,6 +7,7 @@ class ArticleBase(BaseModel):
     description: Optional[str] = None
     content: Optional[str] = None
     source: str
+    author: Optional[str] = None
     published_at: Optional[datetime] = None
     url: str
     category: Optional[str] = None

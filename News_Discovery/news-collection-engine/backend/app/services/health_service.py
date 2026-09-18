@@ -5,6 +5,7 @@ from sqlalchemy import text
 from app.config import settings
 from app.database.database import ACTIVE_DATABASE_URL
 from app.database.models import SourceModel
+from app.database.mongodb import mongo_manager
 from app.services.cache_service import cache_service_instance
 from app.utils.logger import get_logger
 
@@ -25,15 +26,26 @@ class HealthService:
             except Exception:
                 db_status = "degraded (SQLite fallback active)"
 
+        # MongoDB status check
+        mongo_status = mongo_manager.get_status()
+
         # Cache check
         cache_status = "connected (Redis)" if cache_service_instance.is_redis_active else "connected (In-Memory fallback)"
 
         # Available sources count
         avail_sources = db.query(SourceModel).filter(SourceModel.enabled == True).count()
 
+        # Overall health status
+        overall_status = "healthy"
+        if mongo_status.get("configured") and mongo_status.get("status") not in ["connected"]:
+            # MongoDB is configured but currently encountering connection issues
+            overall_status = "degraded_mongodb"
+
         return {
-            "status": "healthy",
+            "status": overall_status,
             "database": db_status,
+            "mongodb": mongo_status,
+            "storage_backend": settings.ARTICLE_STORAGE_BACKEND,
             "cache": cache_status,
             "sources_available": avail_sources,
             "demo_mode": settings.DEMO_MODE,

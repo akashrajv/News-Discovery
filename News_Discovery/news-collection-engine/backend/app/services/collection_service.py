@@ -20,6 +20,7 @@ from app.services.rate_limit_service import RateLimitService
 from app.services.cost_service import CostService
 from app.services.relevance_service import RelevanceService
 from app.services.demo_service import get_demo_articles
+from app.database.mongodb import mongo_manager
 from app.utils.logger import get_logger
 
 logger = get_logger("news_engine.collection_service")
@@ -213,7 +214,8 @@ class CollectionService:
                 title=art.title,
                 description=art.description,
                 content=art.content,
-                target_entity=primary_entity_label
+                target_entity=primary_entity_label,
+                keywords=request_input.keywords
             )
             art.target_entity = analysis["target_entity"]
             art.relevance_score = analysis["relevance_score"]
@@ -242,6 +244,7 @@ class CollectionService:
                 description=article.description,
                 content=article.content,
                 source=article.source,
+                author=getattr(article, "author", None),
                 published_at=article.published_at,
                 url=article.url,
                 category=request_input.category or article.category,
@@ -301,6 +304,42 @@ class CollectionService:
         )
         self.db.add(req_record)
         self.db.commit()
+
+        # Dual-storage: Persist to MongoDB if connected or configured
+        if mongo_manager.is_connected:
+            try:
+                mongo_docs = []
+                for a in db_articles:
+                    mongo_docs.append({
+                        "id": str(a.id),
+                        "title": a.title,
+                        "description": a.description,
+                        "content": a.content,
+                        "source": a.source,
+                        "author": a.author,
+                        "published_at": a.published_at,
+                        "url": a.url,
+                        "category": a.category,
+                        "location": a.location,
+                        "collection_method": a.collection_method,
+                        "collected_at": a.collected_at,
+                        "canonical_url": a.canonical_url,
+                        "normalized_title": a.normalized_title,
+                        "content_hash": a.content_hash,
+                        "dedup_hash": a.dedup_hash,
+                        "source_id": a.source_id,
+                        "target_entity": a.target_entity,
+                        "relevance_score": a.relevance_score,
+                        "importance_score": a.importance_score,
+                        "importance_rating": a.importance_rating,
+                        "sentiment_tone": a.sentiment_tone,
+                        "ai_summary": a.ai_summary,
+                        "image_url": getattr(a, "image_url", None),
+                    })
+                if mongo_docs:
+                    mongo_manager.bulk_upsert_articles(mongo_docs)
+            except Exception as mongo_err:
+                logger.warning(f"Error syncing articles to MongoDB: {mongo_err}")
 
         articles_read = [ArticleRead.model_validate(a) for a in db_articles]
 

@@ -61,6 +61,8 @@ def init_db():
                     conn.execute(text("ALTER TABLE articles ADD COLUMN importance_rating VARCHAR(32) DEFAULT 'MEDIUM'"))
                 if "sentiment_tone" not in col_names:
                     conn.execute(text("ALTER TABLE articles ADD COLUMN sentiment_tone VARCHAR(64) DEFAULT 'Neutral'"))
+                if "author" not in col_names:
+                    conn.execute(text("ALTER TABLE articles ADD COLUMN author VARCHAR(256)"))
                 if "ai_summary" not in col_names:
                     conn.execute(text("ALTER TABLE articles ADD COLUMN ai_summary TEXT"))
 
