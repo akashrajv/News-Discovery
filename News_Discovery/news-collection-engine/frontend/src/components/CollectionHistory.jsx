@@ -29,19 +29,19 @@ export default function CollectionHistory({ history }) {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-mongo-border shadow-xs overflow-hidden">
-      <div className="p-5 border-b border-mongo-border flex items-center justify-between">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+      <div className="p-5 border-b border-slate-200 flex items-center justify-between">
         <div className="flex items-center space-x-2">
-          <History className="w-5 h-5 text-mongo-forest" />
-          <h3 className="font-bold text-mongo-dark text-base font-mono">Pipeline Execution Audit Log</h3>
+          <History className="w-5 h-5 text-linkedin-blue" />
+          <h3 className="font-bold text-slate-900 text-base font-sans">Pipeline Execution Audit Log</h3>
         </div>
-        <span className="text-xs font-mono text-mongo-subtle">{history.length} Requests Recorded</span>
+        <span className="text-xs font-mono text-slate-500">{history.length} Requests Recorded</span>
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse text-xs font-mono">
           <thead>
-            <tr className="bg-mongo-slate border-b border-mongo-border font-bold text-mongo-subtle uppercase tracking-wider">
+            <tr className="bg-[#F3F8FD] border-b border-slate-200 font-bold text-slate-600 uppercase tracking-wider font-sans">
               <th className="py-3 px-4">Request ID</th>
               <th className="py-3 px-4">Entities / Query</th>
               <th className="py-3 px-4">Scope</th>
@@ -51,34 +51,34 @@ export default function CollectionHistory({ history }) {
               <th className="py-3 px-4">Executed At</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-mongo-border">
+          <tbody className="divide-y divide-slate-100">
             {history.map((req) => (
-              <tr key={req.id} className="hover:bg-mongo-slate/60">
-                <td className="py-3 px-4 font-bold text-mongo-forest">{req.id}</td>
+              <tr key={req.id} className="hover:bg-[#F3F8FD]/50 transition-colors">
+                <td className="py-3 px-4 font-bold text-linkedin-blue">{req.id}</td>
                 <td className="py-3 px-4 font-sans">
-                  <div className="font-bold text-mongo-dark">{req.entity}</div>
+                  <div className="font-bold text-slate-900">{req.entity}</div>
                   <div className="text-[11px] text-slate-500 font-mono">
                     Keywords: {Array.isArray(req.keywords) ? req.keywords.join(', ') : req.keywords}
                   </div>
                 </td>
-                <td className="py-3 px-4 text-slate-700">
+                <td className="py-3 px-4 text-slate-700 font-sans">
                   {req.category} ({req.location || 'Global'})
                 </td>
-                <td className="py-3 px-4 text-slate-600">{formatRecencyWindow(req.time_window_minutes)}</td>
+                <td className="py-3 px-4 text-slate-600 font-sans">{formatRecencyWindow(req.time_window_minutes)}</td>
                 <td className="py-3 px-4">
                   <span
-                    className={`inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded text-[10px] uppercase border ${
+                    className={`inline-flex items-center gap-1 font-bold px-2.5 py-0.5 rounded-full text-[10px] uppercase border ${
                       req.status === 'success'
-                        ? 'bg-emerald-100 text-mongo-forest border-emerald-300'
+                        ? 'bg-linkedin-light text-linkedin-blue border-linkedin-border'
                         : req.status === 'partial_success'
-                        ? 'bg-amber-100 text-amber-900 border-amber-300'
-                        : 'bg-rose-100 text-rose-800 border-rose-300'
+                        ? 'bg-amber-50 text-amber-800 border-amber-200'
+                        : 'bg-rose-50 text-rose-800 border-rose-200'
                     }`}
                   >
                     {req.status}
                   </span>
                 </td>
-                <td className="py-3 px-4 text-slate-700">
+                <td className="py-3 px-4 text-slate-700 font-sans">
                   {req.summary ? (
                     <span>
                       {req.summary.articles_collected ?? 0} arts | {req.summary.duplicates_removed ?? 0} dups | ${req.summary.estimated_api_cost ?? 0}
@@ -87,7 +87,7 @@ export default function CollectionHistory({ history }) {
                     <span>-</span>
                   )}
                 </td>
-                <td className="py-3 px-4 text-slate-500">
+                <td className="py-3 px-4 text-slate-500 font-sans">
                   {new Date(req.created_at).toLocaleString()}
                 </td>
               </tr>

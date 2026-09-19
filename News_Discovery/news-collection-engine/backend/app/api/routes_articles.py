@@ -22,6 +22,7 @@ def get_articles(
     source: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     entity: Optional[str] = Query(None),
+    keywords: Optional[str] = Query(None),
     min_relevance: Optional[float] = Query(None, ge=0.0, le=100.0),
     importance: Optional[str] = Query(None),
     page: Optional[int] = Query(None, ge=1),
@@ -108,6 +109,19 @@ def get_articles(
                 ArticleModel.source.ilike(search_pattern)
             )
         )
+    if keywords:
+        kw_list = [k.strip() for k in keywords.split(",") if k.strip()]
+        if kw_list:
+            kw_conditions = []
+            for kw in kw_list:
+                kw_pattern = f"%{kw}%"
+                kw_conditions.extend([
+                    ArticleModel.title.ilike(kw_pattern),
+                    ArticleModel.description.ilike(kw_pattern),
+                    ArticleModel.content.ilike(kw_pattern)
+                ])
+            query = query.filter(or_(*kw_conditions))
+
 
     # Sorting
     sort_attr = getattr(ArticleModel, sort_by, ArticleModel.published_at)

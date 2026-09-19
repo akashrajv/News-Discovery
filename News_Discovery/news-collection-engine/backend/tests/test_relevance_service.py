@@ -76,3 +76,59 @@ def test_filter_by_relevance():
     assert filtered[0].title == "Tesla Unveils Cybercab Robotaxi"
     assert filtered[0].relevance_score >= 50.0
     assert filtered[0].importance_rating in ["HIGH", "CRITICAL"]
+
+def test_spurious_match_openai_vs_open_house():
+    """Verify that 'Open House' does not spuriously trigger high relevance for 'Open AI'."""
+    title = "Burlington Data Centre Open House Draws Questions, Concerns from Residents"
+    desc = "Community members gathered at the open house meeting regarding the proposed data center."
+    analysis = RelevanceService.compute_semantic_analysis(title=title, description=desc, target_entity="Open AI")
+
+    assert analysis["relevance_score"] < 30.0
+    assert "Low relevance" in analysis["ai_summary"]
+
+def test_filter_by_relevance_threshold_tiers():
+    class DummyArticle:
+        def __init__(self, title, description):
+            self.title = title
+            self.description = description
+
+    articles = [
+        DummyArticle("Apple Launches New M4 MacBook Pro with Generative AI Intelligence", "Apple Inc introduces groundbreaking silicon for MacBook lineup with Apple Intelligence."),
+        DummyArticle("Apple Orchard Farms Announces Autumn Harvest Festival", "Local farm opens apple picking season for families in the upstate orchard."),
+        DummyArticle("Tech Industry Trends Overview", "General quarterly review mentioning Apple, Google and Microsoft market performance."),
+    ]
+
+    # At 60% threshold, only direct Apple hardware/AI news should qualify
+    retained_60 = RelevanceService.filter_by_relevance(articles, target_entity="Apple", min_score=60.0)
+    assert len(retained_60) == 1
+    assert "M4 MacBook Pro" in retained_60[0].title
+
+    # At 75% threshold, same high confidence article retained
+    retained_75 = RelevanceService.filter_by_relevance(articles, target_entity="Apple", min_score=75.0)
+    assert len(retained_75) == 1
+    assert retained_75[0].relevance_score >= 75.0
+
+    # At 95% threshold, filters out when bar is extremely high unless peak match
+    retained_95 = RelevanceService.filter_by_relevance(articles, target_entity="Apple", min_score=95.0)
+    assert len(retained_95) <= 1
+
+def test_semantic_analysis_strict_keyword_matching():
+    """Verify that an article must match both the target company and the user-specified keywords."""
+    # Case 1: Matches company (Tesla) AND keyword (robotaxi) -> HIGH relevance
+    res_match = RelevanceService.compute_semantic_analysis(
+        title="Tesla Unveils Cybercab Robotaxi Autonomous Fleet",
+        description="Autonomous driving technology showcase in California",
+        target_entity="Tesla",
+        keywords=["robotaxi", "cybercab"]
+    )
+    assert res_match["relevance_score"] >= 70.0
+
+    # Case 2: Matches company (Tesla) BUT MISSES user keyword (lithium, mining) -> LOW relevance
+    res_miss = RelevanceService.compute_semantic_analysis(
+        title="Tesla Unveils Cybercab Robotaxi Autonomous Fleet",
+        description="Autonomous driving technology showcase in California",
+        target_entity="Tesla",
+        keywords=["lithium mining", "raw materials supply chain"]
+    )
+    assert res_miss["relevance_score"] <= 25.0
+

@@ -89,9 +89,9 @@ class MongoDBManager:
         try:
             logger.info("Connecting to MongoDB cluster...")
             client_kwargs: Dict[str, Any] = {
-                "serverSelectionTimeoutMS": 6000,
-                "connectTimeoutMS": 6000,
-                "socketTimeoutMS": 10000,
+                "serverSelectionTimeoutMS": 2000,
+                "connectTimeoutMS": 2000,
+                "socketTimeoutMS": 3000,
                 "appname": "NewsDiscoveryEngine",
             }
             try:

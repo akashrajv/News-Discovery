@@ -10,12 +10,14 @@ class CollectionRequestInput(BaseModel):
     location: Optional[str] = Field(default="Global", description="Target geographical region")
     category: Optional[str] = Field(default="Automotive", description="Topic category filter")
     time_window_minutes: int = Field(default=60, description="Recency time window in minutes (10, 30, 60, 360, 1440)")
+    min_relevance: Optional[float] = Field(default=60.0, ge=0.0, le=100.0, description="Minimum relevance score threshold (0-100) to retain articles")
 
 class CollectionResponse(BaseModel):
     status: str  # success, partial_success, failed
     request_id: str
     articles_collected: int
     duplicates_removed: int
+    low_relevance_filtered: int = 0
     cache_hits: int
     cache_misses: int
     sources_used: int

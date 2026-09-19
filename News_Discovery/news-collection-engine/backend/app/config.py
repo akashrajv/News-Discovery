@@ -28,6 +28,17 @@ class Settings(BaseSettings):
     GNEWS_API_KEY: Optional[str] = None
     NEWSDATA_API_KEY: Optional[str] = None
 
+    # Qdrant Vector Database (Semantic Discovery)
+    QDRANT_URL: Optional[str] = None
+    QDRANT_API_KEY: Optional[str] = None
+    QDRANT_COLLECTION: str = "news_articles"
+    QDRANT_STORAGE_PATH: str = "./qdrant_storage"
+
+    # DeepSeek-R1 AI Reasoning Engine
+    DEEPSEEK_API_KEY: Optional[str] = None
+    DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
+    DEEPSEEK_MODEL: str = "deepseek-reasoner"
+
     # Resiliency
     MAX_RETRY_ATTEMPTS: int = 3
     RETRY_BACKOFF_FACTOR: float = 2.0

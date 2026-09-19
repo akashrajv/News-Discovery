@@ -15,6 +15,7 @@ from app.api.routes_history import router as history_router
 from app.api.routes_health import router as health_router
 from app.api.routes_cache import router as cache_router
 from app.api.routes_routing import router as routing_router
+from app.api.routes_semantic import router as semantic_router
 
 from app.services.scheduler_service import scheduler_service
 from app.database.mongodb import mongo_manager
@@ -57,6 +58,18 @@ async def lifespan(app: FastAPI):
                 art.sentiment_tone = analysis["sentiment_tone"]
                 art.ai_summary = analysis["ai_summary"]
             db.commit()
+
+        # Seed Qdrant Vector Database with existing stored articles
+        from app.services.qdrant_service import qdrant_service_instance
+        try:
+            status = qdrant_service_instance.get_status()
+            if status.get("indexed_vectors", 0) == 0:
+                all_stored = db.query(ArticleModel).limit(100).all()
+                if all_stored:
+                    indexed_cnt = qdrant_service_instance.bulk_upsert(all_stored)
+                    logger.info(f"Initialized Qdrant Vector DB with {indexed_cnt} stored articles.")
+        except Exception as q_seed_err:
+            logger.debug(f"Qdrant startup indexing: {q_seed_err}")
     finally:
         db.close()
     
@@ -79,8 +92,17 @@ app = FastAPI(
 # CORS Configuration for React Frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "*",
+    ],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -94,6 +116,7 @@ app.include_router(history_router)
 app.include_router(health_router)
 app.include_router(cache_router)
 app.include_router(routing_router)
+app.include_router(semantic_router, prefix="/api")
 
 @app.get("/")
 def root():
@@ -103,3 +126,8 @@ def root():
         "demo_mode": settings.DEMO_MODE,
         "documentation": "/docs"
     }
+
+@app.get("/api/ping")
+def ping():
+    """Lightweight instant ping endpoint for frontend connection heartbeat."""
+    return {"pong": True, "status": "online"}

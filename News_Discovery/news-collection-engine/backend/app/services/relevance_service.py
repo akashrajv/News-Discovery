@@ -1,5 +1,6 @@
 import re
 from typing import Dict, Any, List, Tuple
+from app.services.deepseek_service import deepseek_service_instance
 
 class RelevanceService:
     """
@@ -39,6 +40,18 @@ class RelevanceService:
             "tickers": ["MSFT"],
             "aliases": ["microsoft", "msft", "satya nadella", "azure", "copilot", "windows", "xbox", "surface", "office 365", "teams", "activision", "openai partnership"],
             "core_terms": ["cloud computing", "enterprise software", "ai cloud", "tech giant", "generative ai", "productivity suite"]
+        },
+        "openai": {
+            "name": "OpenAI",
+            "tickers": [],
+            "aliases": ["openai", "open ai", "chatgpt", "sam altman", "gpt-4", "gpt-5", "sora", "dall-e"],
+            "core_terms": ["artificial intelligence", "large language model", "llm", "generative ai", "ai model", "ai agent"]
+        },
+        "google": {
+            "name": "Google",
+            "tickers": ["GOOGL", "GOOG"],
+            "aliases": ["google", "alphabet", "sundar pichai", "gemini", "deepmind", "android", "chrome", "pixel"],
+            "core_terms": ["search engine", "cloud computing", "generative ai", "tech giant", "machine learning"]
         }
     }
 
@@ -67,16 +80,28 @@ class RelevanceService:
             return {"name": "All Companies", "aliases": [], "core_terms": []}
 
         entity_clean = entity.strip().lower()
+        norm_entity = entity_clean.replace(" ", "")
+
+        # 1. Exact or normalized knowledge match
         for key, knowledge in cls.COMPANY_KNOWLEDGE.items():
-            if key in entity_clean or entity_clean in key:
+            norm_key = key.replace(" ", "")
+            if norm_key == norm_entity or any(norm_entity == a.replace(" ", "") for a in knowledge.get("aliases", [])):
+                return knowledge
+            if norm_key in norm_entity or norm_entity in norm_key:
                 return knowledge
 
-        # Dynamic fallback for custom company names
-        words = [w for w in re.findall(r'\w+', entity_clean) if len(w) > 2]
+        # 2. Dynamic fallback for custom company names
+        # Avoid common generic stopwords from becoming standalone aliases
+        COMMON_STOPWORDS = {"the", "and", "inc", "corp", "ltd", "llc", "group", "co", "open", "house", "new", "global", "international"}
+        words = [w for w in re.findall(r'\b\w+\b', entity_clean) if len(w) > 3 and w not in COMMON_STOPWORDS]
+        aliases = [entity_clean]
+        if norm_entity != entity_clean and len(norm_entity) >= 4 and norm_entity not in COMMON_STOPWORDS:
+            aliases.append(norm_entity)
+
         return {
             "name": entity.strip(),
-            "aliases": [entity_clean] + words,
-            "core_terms": words
+            "aliases": list(dict.fromkeys(aliases)),
+            "core_terms": words if words else [entity_clean]
         }
 
     @classmethod
@@ -108,11 +133,11 @@ class RelevanceService:
 
         # Parse target entities (supports single or comma-separated targets)
         if not target_entity or target_entity.strip().lower() in ["all", "all companies"]:
-            target_entities_list = ["All Companies"]
+            target_entities_list = list(cls.COMPANY_KNOWLEDGE.keys())
         else:
             target_entities_list = [e.strip() for e in target_entity.split(",") if e.strip()]
 
-        if len(target_entities_list) > 1 and "All Companies" not in target_entities_list:
+        if len(target_entities_list) > 1:
             best_analysis = None
             max_relevance = -1.0
             for single_target in target_entities_list:
@@ -149,63 +174,76 @@ class RelevanceService:
         keywords = keywords or []
 
         # 1. Target Relevance Score Calculation (0 - 100%)
-        # Based on: (A) Target Company Match + (B) Target Keywords Match
-        relevance_score = 0.0
-        title_alias_match = False
+        # Strictly calculated based ONLY on:
+        # (A) Target Company Given (name, ticker, aliases in title/body)
+        # (B) Keywords of the Target Company Given (user keywords and/or domain core terms in title/body)
+        company_score = 0.0
+        keyword_score = 0.0
 
-        if not target_entity or target_entity.lower() in ["all", "all companies"]:
-            # If monitoring all companies, evaluate general company mentions or user keywords
-            any_known = any(comp in full_text for comp_key in cls.COMPANY_KNOWLEDGE for comp in cls.COMPANY_KNOWLEDGE[comp_key]["aliases"])
-            relevance_score = 85.0 if any_known else 60.0
-            title_alias_match = any_known
+        def has_term(term: str, text: str) -> bool:
+            if not term or not text:
+                return False
+            escaped = re.escape(term.lower().strip())
+            pattern = rf"(?<!\w){escaped}(?!\w)"
+            return bool(re.search(pattern, text))
 
-            if keywords:
-                kw_title = any(kw in title_lower for kw in keywords)
-                kw_body = sum(1 for kw in keywords if kw in full_text)
-                if kw_title:
-                    relevance_score = min(100.0, relevance_score + 15.0)
-                elif kw_body > 0:
-                    relevance_score = min(100.0, relevance_score + 10.0)
-        else:
-            # (A) Target Company Match Component (Up to 60-70 points)
-            title_alias_match = any(alias in title_lower for alias in aliases)
-            if title_alias_match:
-                relevance_score += 50.0
-            elif any(alias in full_text for alias in aliases):
-                relevance_score += 30.0
-            elif any(term in title_lower for term in core_terms):
-                relevance_score += 20.0
+        def count_term(term: str, text: str) -> int:
+            if not term or not text:
+                return 0
+            escaped = re.escape(term.lower().strip())
+            pattern = rf"(?<!\w){escaped}(?!\w)"
+            return len(re.findall(pattern, text))
 
-            # Additional body company mentions (+10 points)
-            body_alias_match_count = sum(1 for alias in aliases if alias in full_text)
-            if body_alias_match_count > 1:
-                relevance_score += min(10.0, (body_alias_match_count - 1) * 5.0)
+        # (A) Target Company Match Component (Up to 60 pts)
+        title_alias_match = any(has_term(alias, title_lower) for alias in aliases)
+        body_alias_match = any(has_term(alias, full_text) for alias in aliases)
 
-            # (B) Keywords Match Component (Up to 30-40 points)
-            if keywords:
-                # Custom keywords specified by the user
-                kw_title_matches = sum(1 for kw in keywords if kw in title_lower)
-                kw_body_matches = sum(1 for kw in keywords if kw in full_text)
+        if title_alias_match:
+            company_score += 50.0
+            # Additional body mentions boost
+            body_mentions = sum(count_term(alias, full_text) for alias in aliases)
+            if body_mentions > 1:
+                company_score += min(10.0, (body_mentions - 1) * 5.0)
+            elif body_alias_match:
+                company_score += 5.0
+        elif body_alias_match:
+            company_score += 25.0
+            body_mentions = sum(count_term(alias, full_text) for alias in aliases)
+            if body_mentions > 1:
+                company_score += min(10.0, (body_mentions - 1) * 5.0)
 
-                if kw_title_matches > 0:
-                    relevance_score += min(25.0, kw_title_matches * 15.0)
-                if kw_body_matches > 0:
-                    relevance_score += min(15.0, kw_body_matches * 5.0)
-            else:
-                # Default domain core terms if no specific custom keywords were given
-                core_title_matches = sum(1 for term in core_terms if term in title_lower)
-                core_matches = sum(1 for term in core_terms if term in full_text)
-                if core_title_matches > 0:
-                    relevance_score += min(20.0, core_title_matches * 10.0)
-                elif core_matches > 0:
-                    relevance_score += min(10.0, core_matches * 5.0)
+        company_score = min(60.0, company_score)
 
-                # If company itself strongly matches the title, grant baseline prominence
-                if title_alias_match:
-                    relevance_score += 15.0
+        # (B) Target Company Keywords Match Component (Up to 40 pts)
+        active_keywords = list(keywords) if keywords else list(core_terms)
 
-            # Cap at 100%
-            relevance_score = min(100.0, round(relevance_score, 1))
+        kw_title_matches = sum(1 for kw in active_keywords if has_term(kw, title_lower))
+        kw_body_matches = sum(1 for kw in active_keywords if has_term(kw, full_text))
+
+        if kw_title_matches > 0:
+            keyword_score += min(25.0, kw_title_matches * 15.0)
+        if kw_body_matches > 0:
+            keyword_score += min(15.0, kw_body_matches * 5.0)
+
+        keyword_score = min(40.0, keyword_score)
+
+        # Total relevance score
+        total_score = company_score + keyword_score
+
+        # Guardrail 1: If neither company nor aliases matched anywhere in title or body,
+        # an article cannot have high relevance to the target company.
+        if not title_alias_match and not body_alias_match:
+            total_score = min(20.0, total_score)
+
+        # Guardrail 2: Strict Keyword Requirement
+        # If the user explicitly provided keywords, the article MUST match at least one keyword.
+        # Otherwise, the article is not relevant to the requested user keywords.
+        if keywords and len(keywords) > 0:
+            user_kw_matches = sum(1 for kw in keywords if has_term(kw, full_text))
+            if user_kw_matches == 0:
+                total_score = min(20.0, total_score * 0.3)
+
+        relevance_score = min(100.0, round(total_score, 1))
 
         # 2. Business Importance Rating & Score (0 - 100)
         importance_score = 40.0 # Baseline MEDIUM importance
@@ -252,7 +290,15 @@ class RelevanceService:
         else:
             sentiment_tone = "Neutral"
 
-        # 4. Generate AI Importance Summary
+        # 4. Generate AI Importance Summary & DeepSeek-R1 Reasoning
+        deepseek_analysis = deepseek_service_instance.analyze_article(
+            title=title_text,
+            description=desc_text,
+            content=body_text,
+            target_entity=company_name,
+            keywords=keywords
+        )
+
         ai_summary = cls._generate_ai_summary(
             company_name=company_name,
             title=title_text,
@@ -267,40 +313,49 @@ class RelevanceService:
             "importance_score": importance_score,
             "importance_rating": importance_rating,
             "sentiment_tone": sentiment_tone,
-            "ai_summary": ai_summary
+            "ai_summary": ai_summary,
+            "reasoning_trace": deepseek_analysis.get("reasoning_trace", "")
         }
 
     @classmethod
     def _generate_ai_summary(
         cls, company_name: str, title: str, importance_rating: str, sentiment_tone: str, relevance_score: float
     ) -> str:
-        """Constructs concise AI executive takeaway explaining why the article is important to the target company."""
+        """Constructs a comprehensive 3-line AI executive takeaway explaining why the article is important to the target company."""
+        clean_title = title.strip() if title else f"Developments concerning {company_name}"
+        if not clean_title.endswith('.'):
+            clean_title += '.'
+
+        line1 = f"• Event: {clean_title}"
         if relevance_score < 40.0:
-            return f"Low relevance match to {company_name}. Mentions broader industry trends or generic market context."
+            line2 = f"• Strategic Impact: Low relevance match to {company_name} ({relevance_score:.0f}%), mentioning broader industry trends or background mentions."
+            line3 = f"• Forward Outlook: Indirect exposure with negligible operational impact on {company_name} core operations."
+        else:
+            impact_desc = {
+                "Positive Milestone": f"Direct positive product or technology advancement strengthening {company_name}'s market position.",
+                "Risk / Threat": f"Potential risk, regulatory scrutiny, or competitive headwinds affecting {company_name}.",
+                "Strategic Expansion": f"Key operational expansion, partnership, or commercial growth initiative for {company_name}.",
+                "Bullish / Opportunity": f"Commercial opportunity and growth momentum for {company_name}'s product ecosystem.",
+                "Regulatory Headwind": f"Compliance and regulatory oversight impacting {company_name}'s operational roadmap.",
+                "Neutral": f"Business coverage monitoring {company_name}'s ongoing industry activities and market presence."
+            }.get(sentiment_tone, f"Strategic industry coverage directly concerning {company_name}.")
+            line2 = f"• Strategic Impact: [{importance_rating.upper()} IMPACT] {impact_desc}"
+            line3 = f"• Forward Outlook: Target relevance assessed at {relevance_score:.0f}%; recommend tracking subsequent execution milestones."
 
-        impact_desc = {
-            "Positive Milestone": f"Direct positive product or technology advancement impacting {company_name}'s market position.",
-            "Risk / Threat": f"Potential risk, regulatory scrutiny, or competitive threat affecting {company_name}.",
-            "Strategic Expansion": f"Key operational expansion, partnership, or market growth initiative for {company_name}.",
-            "Neutral": f"Relevant business coverage monitoring {company_name}'s industry activities and developments."
-        }.get(sentiment_tone, f"Strategic coverage concerning {company_name}.")
-
-        return f"[{importance_rating} IMPACT] {impact_desc} (Relevance: {relevance_score:.0f}%)"
+        return f"{line1}\n{line2}\n{line3}"
 
     @classmethod
     def filter_by_relevance(
-        cls, articles: List[Any], target_entity: str = "All Companies", min_score: float = 30.0
+        cls, articles: List[Any], target_entity: str = "All Companies", min_score: float = 60.0
     ) -> List[Any]:
-        """Filters articles, keeping only those above the minimum semantic target relevance score."""
-        if not target_entity or target_entity.strip().lower() in ["all", "all companies"]:
-            return articles
-
+        """Filters articles, keeping only those equal to or above the minimum semantic target relevance score (default >= 60.0)."""
         retained = []
+        target = target_entity if (target_entity and target_entity.strip().lower() not in ["all", "all companies"]) else "All Companies"
         for article in articles:
             title = getattr(article, "title", "")
             desc = getattr(article, "description", None)
             content = getattr(article, "content", None)
-            analysis = cls.compute_semantic_analysis(title, desc, content, target_entity)
+            analysis = cls.compute_semantic_analysis(title, desc, content, target)
 
             # Attach scores to article object
             article.target_entity = analysis["target_entity"]

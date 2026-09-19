@@ -84,6 +84,8 @@ class ArticleModel(Base):
     importance_rating = Column(String(32), default="MEDIUM", index=True)
     sentiment_tone = Column(String(32), default="Neutral")
     ai_summary = Column(Text, nullable=True)
+    reasoning_trace = Column(Text, nullable=True)  # DeepSeek-R1 <think> reasoning chain
+    qdrant_point_id = Column(String(64), nullable=True, index=True)  # Qdrant vector tracking point ID
 
     @property
     def fetched_at(self):

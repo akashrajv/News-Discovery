@@ -60,14 +60,16 @@ class CacheService:
         keywords: List[str],
         location: Optional[str] = None,
         category: Optional[str] = None,
-        time_window_minutes: int = 60
+        time_window_minutes: int = 60,
+        min_relevance: Optional[float] = None
     ) -> str:
         norm_entity = entity.strip().lower()
         norm_kw = ",".join(sorted([k.strip().lower() for k in keywords if k.strip()]))
         kw_hash = hashlib.md5(norm_kw.encode('utf-8')).hexdigest()[:8]
         norm_loc = (location or "all").strip().lower()
         norm_cat = (category or "all").strip().lower()
-        return f"news:{norm_entity}:{kw_hash}:{norm_loc}:{norm_cat}:{time_window_minutes}"
+        rel_str = f":rel{int(min_relevance)}" if min_relevance is not None else ""
+        return f"news:{norm_entity}:{kw_hash}:{norm_loc}:{norm_cat}:{time_window_minutes}{rel_str}"
 
     def get(self, key: str) -> Optional[Dict[str, Any]]:
         """Retrieve cached JSON payload if key exists and is unexpired."""

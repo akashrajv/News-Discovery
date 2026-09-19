@@ -33,49 +33,81 @@ export default function App() {
   const [usageData, setUsageData] = useState(null);
   const [history, setHistory] = useState([]);
   const [selectedArticle, setSelectedArticle] = useState(null);
+  const [activeTargetFilter, setActiveTargetFilter] = useState({ entity: '', keywords: [] });
 
-  // Initial Load & Health Check
-  const loadInitialData = async () => {
+  const [isConnected, setIsConnected] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+
+  // Initial Load & Health Check with auto-recovery
+  const loadInitialData = async (manual = false) => {
+    if (manual) setIsRetrying(true);
     try {
       const healthRes = await fetchHealth();
       setHealth(healthRes);
+      setIsConnected(true);
+      setError(null);
 
-      const sourcesRes = await fetchSourcesStatus();
-      setSources(sourcesRes);
+      const [sourcesRes, articlesRes, usageRes, historyRes, routingRes] = await Promise.allSettled([
+        fetchSourcesStatus(),
+        fetchArticles(),
+        fetchUsage(),
+        fetchCollectionHistory(),
+        fetchLastRoutingDecision(),
+      ]);
 
-      const articlesRes = await fetchArticles();
-      setArticles(articlesRes);
-
-      const usageRes = await fetchUsage();
-      setUsageData(usageRes);
-
-      const historyRes = await fetchCollectionHistory();
-      setHistory(historyRes);
-
-      const routingRes = await fetchLastRoutingDecision();
-      if (routingRes && routingRes.request_id) {
-        setRoutingSummary(routingRes);
+      if (sourcesRes.status === 'fulfilled') setSources(sourcesRes.value);
+      if (articlesRes.status === 'fulfilled') setArticles(articlesRes.value);
+      if (usageRes.status === 'fulfilled') setUsageData(usageRes.value);
+      if (historyRes.status === 'fulfilled') setHistory(historyRes.value);
+      if (routingRes.status === 'fulfilled' && routingRes.value?.request_id) {
+        setRoutingSummary(routingRes.value);
       }
     } catch (err) {
-      console.error('Failed loading backend initial state:', err);
+      console.error('Failed loading backend state:', err);
+      setIsConnected(false);
       setError('Could not connect to FastAPI backend server. Ensure backend is running at http://127.0.0.1:8000.');
+    } finally {
+      if (manual) setIsRetrying(false);
     }
   };
 
   useEffect(() => {
     loadInitialData();
-  }, []);
+
+    // Resilient heartbeat: every 3.5s if disconnected, every 25s if connected
+    const interval = setInterval(() => {
+      if (!isConnected) {
+        loadInitialData();
+      } else {
+        fetchHealth()
+          .then((h) => {
+            setHealth(h);
+            setIsConnected(true);
+          })
+          .catch(() => {
+            setIsConnected(false);
+          });
+      }
+    }, isConnected ? 25000 : 3500);
+
+    return () => clearInterval(interval);
+  }, [isConnected]);
 
   // Handle Pipeline Execution Request
   const handleCollect = async (formData) => {
     setLoading(true);
     setError(null);
+    setActiveTargetFilter({
+      entity: formData.entity || '',
+      keywords: formData.keywords || [],
+    });
     try {
       const response = await collectNews(formData);
       setArticles(response.articles || []);
       setStats({
         articles_collected: response.articles_collected,
         duplicates_removed: response.duplicates_removed,
+        low_relevance_filtered: response.low_relevance_filtered ?? 0,
         cache_hits: response.cache_hits,
         cache_misses: response.cache_misses,
         api_requests: response.api_requests,
@@ -107,25 +139,43 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-mongo-slate flex flex-col font-sans text-mongo-dark selection:bg-mongo-green selection:text-mongo-dark">
+    <div className="min-h-screen bg-[#F3F2F0] flex flex-col font-sans text-slate-900 selection:bg-linkedin-blue selection:text-white">
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         health={health}
         demoMode={health?.demo_mode ?? true}
+        isConnected={isConnected}
+        isRetrying={isRetrying}
+        onRetry={() => loadInitialData(true)}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Banner Alert for Error */}
+        {/* Banner Alert for Error or Disconnected Backend */}
         {error && (
-          <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-xl text-xs font-mono flex justify-between items-center">
-            <span>{error}</span>
-            <button
-              onClick={() => setError(null)}
-              className="text-xs font-bold underline hover:text-rose-950 ml-4"
-            >
-              Dismiss
-            </button>
+          <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-xl text-xs flex flex-wrap justify-between items-center gap-2 shadow-xs">
+            <div className="flex items-center space-x-2 font-mono">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+              </span>
+              <span>{error}</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => loadInitialData(true)}
+                disabled={isRetrying}
+                className="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1 rounded-md text-xs font-semibold shadow-xs transition-all cursor-pointer disabled:opacity-50"
+              >
+                {isRetrying ? 'Connecting...' : 'Retry Connection Now'}
+              </button>
+              <button
+                onClick={() => setError(null)}
+                className="text-xs font-bold underline hover:text-rose-950 cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
           </div>
         )}
 
@@ -137,6 +187,8 @@ export default function App() {
             <RoutingPanel routingSummary={routingSummary} />
             <ArticleTable
               articles={articles}
+              activeTargetFilter={activeTargetFilter}
+              onClearFilter={() => setActiveTargetFilter({ entity: '', keywords: [] })}
               onSelectArticle={(art) => setSelectedArticle(art)}
               onCollectForCompany={(companyName) => {
                 handleCollect({
@@ -179,9 +231,9 @@ export default function App() {
         />
       )}
 
-      {/* MongoDB Atlas Style Footer */}
-      <footer className="bg-white border-t border-mongo-border py-4 text-center text-xs font-mono text-mongo-subtle">
-        Antigravity News Collection Engine &bull; Layer 1.0 &copy; 2026 AI News Intelligence Platform
+      {/* LinkedIn Style Footer */}
+      <footer className="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500 font-sans">
+        <span className="font-semibold text-linkedin-blue">News Collection Engine</span> &bull; Layer 1.0 &copy; 2026 AI News Intelligence Platform
       </footer>
     </div>
   );

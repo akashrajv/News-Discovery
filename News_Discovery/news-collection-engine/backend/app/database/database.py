@@ -65,6 +65,10 @@ def init_db():
                     conn.execute(text("ALTER TABLE articles ADD COLUMN author VARCHAR(256)"))
                 if "ai_summary" not in col_names:
                     conn.execute(text("ALTER TABLE articles ADD COLUMN ai_summary TEXT"))
+                if "reasoning_trace" not in col_names:
+                    conn.execute(text("ALTER TABLE articles ADD COLUMN reasoning_trace TEXT"))
+                if "qdrant_point_id" not in col_names:
+                    conn.execute(text("ALTER TABLE articles ADD COLUMN qdrant_point_id VARCHAR(64)"))
 
             sources_cols_res = conn.execute(text("PRAGMA table_info(sources)")).fetchall()
             src_col_names = {row[1] for row in sources_cols_res} if sources_cols_res else set()

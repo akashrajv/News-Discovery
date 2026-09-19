@@ -24,6 +24,8 @@ class ArticleBase(BaseModel):
     importance_rating: Optional[str] = "MEDIUM"
     sentiment_tone: Optional[str] = "Neutral"
     ai_summary: Optional[str] = None
+    reasoning_trace: Optional[str] = None  # DeepSeek-R1 <think> reasoning chain
+    qdrant_point_id: Optional[str] = None  # Qdrant vector tracking point ID
 
 class ArticleCreate(ArticleBase):
     canonical_url: Optional[str] = None
@@ -64,3 +66,20 @@ class DuplicateRelationshipRead(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class SemanticSearchRequest(BaseModel):
+    query: str = Field(..., description="Natural language semantic search query")
+    limit: int = Field(default=10, ge=1, le=50, description="Max results to return")
+    min_score: float = Field(default=0.4, ge=0.0, le=1.0, description="Minimum cosine similarity score")
+    entity_filter: Optional[str] = Field(default=None, description="Optional target entity filter")
+
+class SemanticSearchResultItem(BaseModel):
+    article: ArticleRead
+    similarity_score: float
+    score_percentage: int
+
+class SemanticSearchResponse(BaseModel):
+    query: str
+    total_found: int
+    results: List[SemanticSearchResultItem]
+    vector_engine: str = "Qdrant"

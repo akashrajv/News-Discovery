@@ -5,8 +5,37 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000,
+  timeout: 45000,
 });
+
+// Automatic retry interceptor for transient network hiccups or backend boot delays
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const config = error.config;
+    if (!config || (config.__retryCount || 0) >= 2) {
+      return Promise.reject(error);
+    }
+
+    const isNetworkError = !error.response || error.code === 'ERR_NETWORK' || error.code === 'ECONNABORTED';
+    const isGatewayError = error.response && [502, 503, 504].includes(error.response.status);
+
+    // Only retry idempotent GET requests or initial connection attempts
+    if (isNetworkError || isGatewayError) {
+      config.__retryCount = (config.__retryCount || 0) + 1;
+      const delay = config.__retryCount * 750;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return api(config);
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+export const pingBackend = async () => {
+  const response = await api.get('/ping', { timeout: 5000 });
+  return response.data;
+};
 
 export const collectNews = async (data) => {
   const response = await api.post('/collect-news', data);
@@ -55,6 +84,26 @@ export const fetchHealth = async () => {
 
 export const fetchLastRoutingDecision = async () => {
   const response = await api.get('/routing/last-decision');
+  return response.data;
+};
+
+export const searchSemantic = async (query, limit = 10, minScore = 0.35, entityFilter = null) => {
+  const response = await api.post('/semantic/search', {
+    query,
+    limit,
+    min_score: minScore,
+    entity_filter: entityFilter,
+  });
+  return response.data;
+};
+
+export const fetchSimilarArticles = async (articleId, limit = 4) => {
+  const response = await api.get(`/semantic/similar/${articleId}`, { params: { limit } });
+  return response.data;
+};
+
+export const fetchSemanticStatus = async () => {
+  const response = await api.get('/semantic/status');
   return response.data;
 };
 

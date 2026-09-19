@@ -19,6 +19,7 @@ from app.services.cache_service import cache_service_instance, CacheService
 from app.services.rate_limit_service import RateLimitService
 from app.services.cost_service import CostService
 from app.services.relevance_service import RelevanceService
+from app.services.qdrant_service import qdrant_service_instance
 from app.services.demo_service import get_demo_articles
 from app.database.mongodb import mongo_manager
 from app.utils.logger import get_logger
@@ -46,12 +47,17 @@ class CollectionService:
         logger.info(f"Starting news collection [{request_id}] for entities: '{primary_entity_label}'")
 
         # 1. Generate Cache Key
+        min_relevance_threshold = getattr(request_input, "min_relevance", 60.0)
+        if min_relevance_threshold is None:
+            min_relevance_threshold = 60.0
+
         cache_key = CacheService.generate_cache_key(
             entity=primary_entity_label,
             keywords=request_input.keywords,
             location=request_input.location,
             category=request_input.category,
-            time_window_minutes=request_input.time_window_minutes
+            time_window_minutes=request_input.time_window_minutes,
+            min_relevance=min_relevance_threshold
         )
 
         # 2. Check Cache
@@ -85,6 +91,7 @@ class CollectionService:
                 request_id=request_id,
                 articles_collected=len(articles_read),
                 duplicates_removed=cached_data.get("duplicates_removed", 0),
+                low_relevance_filtered=cached_data.get("low_relevance_filtered", 0),
                 cache_hits=1,
                 cache_misses=0,
                 sources_used=0,
@@ -209,6 +216,7 @@ class CollectionService:
 
         # 5.5 AI Semantic Relevance Filtering & Enrichment
         semantically_filtered = []
+        low_relevance_filtered = 0
         for art in retained_articles:
             analysis = RelevanceService.compute_semantic_analysis(
                 title=art.title,
@@ -223,9 +231,11 @@ class CollectionService:
             art.importance_rating = analysis["importance_rating"]
             art.sentiment_tone = analysis["sentiment_tone"]
             art.ai_summary = analysis["ai_summary"]
+            art.reasoning_trace = analysis.get("reasoning_trace", "")
 
-            # Filter out articles below 30% relevance when a specific entity is requested
-            if primary_entity_label and primary_entity_label.lower() not in ["all", "all companies"] and analysis["relevance_score"] < 30.0:
+            # Filter out articles below min_relevance threshold (default >= 60.0%)
+            if analysis["relevance_score"] < min_relevance_threshold:
+                low_relevance_filtered += 1
                 continue
             semantically_filtered.append(art)
 
@@ -260,12 +270,19 @@ class CollectionService:
                 importance_score=getattr(article, "importance_score", 50.0),
                 importance_rating=getattr(article, "importance_rating", "MEDIUM"),
                 sentiment_tone=getattr(article, "sentiment_tone", "Neutral"),
-                ai_summary=getattr(article, "ai_summary", None)
+                ai_summary=getattr(article, "ai_summary", None),
+                reasoning_trace=getattr(article, "reasoning_trace", None)
             )
             self.db.add(art_model)
             db_articles.append(art_model)
 
         self.db.flush()
+
+        # 7.5 Index unique articles into Qdrant Vector Database
+        try:
+            qdrant_service_instance.bulk_upsert(db_articles)
+        except Exception as q_err:
+            logger.warning(f"Qdrant vector indexing warning: {q_err}")
 
         # Save Duplicate Relationships
         for dup in duplicate_relationships:
@@ -297,6 +314,7 @@ class CollectionService:
             summary={
                 "articles_collected": len(db_articles),
                 "duplicates_removed": duplicates_removed,
+                "low_relevance_filtered": low_relevance_filtered,
                 "sources_used": sources_used,
                 "sources_failed": sources_failed,
                 "estimated_api_cost": round(total_estimated_cost, 4)
@@ -347,18 +365,20 @@ class CollectionService:
         cache_payload = {
             "articles": [a.model_dump() for a in articles_read],
             "duplicates_removed": duplicates_removed,
+            "low_relevance_filtered": low_relevance_filtered,
             "sources_used": sources_used,
             "estimated_api_cost": round(total_estimated_cost, 4)
         }
         cache_service_instance.set(cache_key, cache_payload)
 
-        logger.info(f"Collection [{request_id}] completed: {len(articles_read)} articles, {duplicates_removed} duplicates removed")
+        logger.info(f"Collection [{request_id}] completed: {len(articles_read)} articles, {duplicates_removed} duplicates removed, {low_relevance_filtered} low-relevance filtered (threshold={min_relevance_threshold}%)")
 
         return CollectionResponse(
             status=overall_status,
             request_id=request_id,
             articles_collected=len(articles_read),
             duplicates_removed=duplicates_removed,
+            low_relevance_filtered=low_relevance_filtered,
             cache_hits=0,
             cache_misses=1,
             sources_used=sources_used,
