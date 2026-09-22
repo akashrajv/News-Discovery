@@ -124,12 +124,18 @@ export default function ArticleTable({
       'openai': ['openai', 'open ai', 'chatgpt', 'sam altman'],
       'google': ['google', 'alphabet', 'gemini', 'deepmind', 'sundar pichai'],
       'amazon': ['amazon', 'aws', 'andy jassy', 'jeff bezos'],
-      'meta': ['meta', 'facebook', 'instagram', 'zuckerberg', 'llama']
-    }[compLower] || [compLower];
+      'meta': ['meta', 'facebook', 'instagram', 'zuckerberg', 'llama'],
+      'vee technologies': ['vee technologies', 'vee tech', 'vee-tech'],
+      'vee tech': ['vee technologies', 'vee tech', 'vee-tech'],
+      'infosys': ['infosys', 'infy', 'salil parekh']
+    }[compLower] || [compLower, compLower.replace('technologies', 'tech').trim()];
 
     return articles.filter(art => {
-      const txt = `${art.target_entity || ''} ${art.title || ''} ${art.description || ''} ${art.content || ''}`.toLowerCase();
-      return knownAliases.some(a => txt.includes(a));
+      const contentText = `${art.title || ''} ${art.description || ''} ${art.content || ''}`.toLowerCase();
+      const entityTag = (art.target_entity || '').toLowerCase();
+      const hasContentMatch = knownAliases.some(a => contentText.includes(a));
+      const hasValidEntityTag = entityTag.includes(compLower) && (art.relevance_score == null || art.relevance_score >= 25.0);
+      return hasContentMatch || hasValidEntityTag;
     }).length;
   };
 
@@ -205,10 +211,22 @@ export default function ArticleTable({
         'tata motors': ['tata motors', 'tata motor', 'tata nexon', 'tata tiago', 'tata punch', 'tata curvv', 'jlr', 'jaguar land rover', 'tata ev'],
         'tesla': ['tesla', 'tsla', 'elon musk', 'cybercab', 'robotaxi', 'cybertruck', 'fsd', 'model 3', 'model y'],
         'apple': ['apple', 'aapl', 'iphone', 'macbook', 'ios', 'apple intelligence', 'tim cook'],
-        'microsoft': ['microsoft', 'msft', 'azure', 'copilot', 'windows', 'satya nadella']
-      }[compLower] || [compLower];
+        'microsoft': ['microsoft', 'msft', 'azure', 'copilot', 'windows', 'satya nadella'],
+        'openai': ['openai', 'open ai', 'chatgpt', 'sam altman'],
+        'google': ['google', 'alphabet', 'gemini', 'deepmind', 'sundar pichai'],
+        'amazon': ['amazon', 'aws', 'andy jassy', 'jeff bezos'],
+        'meta': ['meta', 'facebook', 'instagram', 'zuckerberg', 'llama'],
+        'vee technologies': ['vee technologies', 'vee tech', 'vee-tech'],
+        'vee tech': ['vee technologies', 'vee tech', 'vee-tech'],
+        'infosys': ['infosys', 'infy', 'salil parekh']
+      }[compLower] || [compLower, compLower.replace('technologies', 'tech').trim()];
 
-      matchesCompany = aliases.some(alias => targetText.includes(alias));
+      const contentText = `${art.title || ''} ${art.description || ''} ${art.content || ''}`.toLowerCase();
+      const entityTag = (art.target_entity || '').toLowerCase();
+      const hasContentMatch = aliases.some(alias => contentText.includes(alias));
+      const hasValidEntityTag = entityTag.includes(compLower) && (art.relevance_score == null || art.relevance_score >= 25.0);
+
+      matchesCompany = hasContentMatch || hasValidEntityTag;
     }
 
     // 2. Strict Keyword Match: When keywords are entered, article MUST match at least one keyword

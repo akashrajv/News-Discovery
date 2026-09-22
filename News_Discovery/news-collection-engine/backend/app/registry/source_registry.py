@@ -18,13 +18,13 @@ logger = get_logger("news_engine.source_registry")
 DEFAULT_SOURCES = [
     {
         "id": "src_rss_google_news",
-        "name": "Google News RSS - Auto & EV",
+        "name": "Google News RSS - India & Global",
         "source_type": "RSS",
         "connection_method": "rss",
-        "rss_url": "https://news.google.com/rss/search?q=Tata+Motors+EV&hl=en-IN&gl=IN&ceid=IN:en",
+        "rss_url": "https://news.google.com/rss/search?q={query}&hl=en-IN&gl=IN&ceid=IN:en",
         "enabled": True,
-        "priority": 9,
-        "request_limit": 1000,
+        "priority": 10,
+        "request_limit": 5000,
         "rate_limit_window_seconds": 86400,
         "estimated_cost_per_request": 0.0,
         "current_status": "AVAILABLE"
@@ -121,7 +121,15 @@ class SourceRegistry:
         today_start = datetime(now.year, now.month, now.day)
         for src_data in DEFAULT_SOURCES:
             existing = db.query(SourceModel).filter(SourceModel.id == src_data["id"]).first()
-            if not existing:
+            if existing:
+                if existing.id == "src_rss_google_news" and ("Tata+Motors" in (existing.rss_url or "") or "{query}" not in (existing.rss_url or "")):
+                    existing.rss_url = src_data["rss_url"]
+                    existing.name = src_data["name"]
+                    existing.priority = src_data["priority"]
+                if existing.last_reset_at is None:
+                    existing.last_reset_at = today_start
+                    existing.requests_used_today = existing.requests_used_today or 0
+            else:
                 env_key = src_data.get("api_key_env_name")
                 key_configured = bool(os.getenv(env_key)) if env_key else False
                 
@@ -146,10 +154,6 @@ class SourceRegistry:
                     current_status="AVAILABLE" if (src_data["connection_method"] == "rss" or key_configured) else "UNAVAILABLE"
                 )
                 db.add(source)
-            else:
-                if existing.last_reset_at is None:
-                    existing.last_reset_at = today_start
-                    existing.requests_used_today = existing.requests_used_today or 0
         db.commit()
 
     @staticmethod

@@ -225,8 +225,14 @@ class CollectionService:
                 target_entity=primary_entity_label,
                 keywords=request_input.keywords
             )
-            art.target_entity = analysis["target_entity"]
-            art.relevance_score = analysis["relevance_score"]
+            rel_score = analysis["relevance_score"]
+            # Guardrail: Only assign target_entity if relevance is at least 30% (has entity/keyword correlation)
+            if rel_score >= 30.0:
+                art.target_entity = analysis["target_entity"]
+            else:
+                art.target_entity = "General News"
+
+            art.relevance_score = rel_score
             art.importance_score = analysis["importance_score"]
             art.importance_rating = analysis["importance_rating"]
             art.sentiment_tone = analysis["sentiment_tone"]
@@ -234,7 +240,7 @@ class CollectionService:
             art.reasoning_trace = analysis.get("reasoning_trace", "")
 
             # Filter out articles below min_relevance threshold (default >= 60.0%)
-            if analysis["relevance_score"] < min_relevance_threshold:
+            if rel_score < min_relevance_threshold:
                 low_relevance_filtered += 1
                 continue
             semantically_filtered.append(art)
@@ -265,8 +271,8 @@ class CollectionService:
                 content_hash=article.content_hash,
                 source_id=article.source_id,
                 publication_time_unavailable=article.publication_time_unavailable,
-                target_entity=getattr(article, "target_entity", primary_entity_label),
-                relevance_score=getattr(article, "relevance_score", 85.0),
+                target_entity=getattr(article, "target_entity", "General News") or "General News",
+                relevance_score=getattr(article, "relevance_score", 0.0),
                 importance_score=getattr(article, "importance_score", 50.0),
                 importance_rating=getattr(article, "importance_rating", "MEDIUM"),
                 sentiment_tone=getattr(article, "sentiment_tone", "Neutral"),

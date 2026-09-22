@@ -93,9 +93,13 @@ class RelevanceService:
         # 2. Dynamic fallback for custom company names
         # Avoid common generic stopwords from becoming standalone aliases
         COMMON_STOPWORDS = {"the", "and", "inc", "corp", "ltd", "llc", "group", "co", "open", "house", "new", "global", "international"}
-        words = [w for w in re.findall(r'\b\w+\b', entity_clean) if len(w) > 3 and w not in COMMON_STOPWORDS]
+        words = [w for w in re.findall(r'\b\w+\b', entity_clean) if len(w) >= 3 and w not in COMMON_STOPWORDS]
         aliases = [entity_clean]
-        if norm_entity != entity_clean and len(norm_entity) >= 4 and norm_entity not in COMMON_STOPWORDS:
+        if "technologies" in entity_clean:
+            aliases.append(entity_clean.replace("technologies", "tech").strip())
+        elif "tech" in entity_clean:
+            aliases.append(entity_clean.replace("tech", "technologies").strip())
+        if norm_entity != entity_clean and len(norm_entity) >= 3 and norm_entity not in COMMON_STOPWORDS:
             aliases.append(norm_entity)
 
         return {

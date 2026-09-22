@@ -19,14 +19,7 @@ class HealthService:
     @staticmethod
     def get_health_status(db: Session) -> Dict[str, Any]:
         # Database check
-        db_status = "connected"
-        if "sqlite" in ACTIVE_DATABASE_URL:
-            db_status = "connected (SQLite fallback)"
-        else:
-            try:
-                db.execute(text("SELECT 1"))
-            except Exception:
-                db_status = "degraded (SQLite fallback active)"
+        db_status = "connected (SQLite Primary)" if "sqlite" in ACTIVE_DATABASE_URL else "connected"
 
         # MongoDB status check
         mongo_status = mongo_manager.get_status()

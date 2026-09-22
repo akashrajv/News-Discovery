@@ -30,24 +30,43 @@ export default function CollectionForm({ onCollect, loading }) {
 
   const handlePreset = (presetType) => {
     switch (presetType) {
+      case 'INDIA':
+        setEntity('Vee Technologies, Tata Motors, Infosys, Zoho');
+        setKeywords('revenue, expansion, tech, hiring, contract');
+        setLocation('India');
+        setCategory('Technology & Business');
+        break;
+      case 'STATES':
+        setEntity('tech companies, startups, MSME, industry');
+        setKeywords('expansion, revenue, investment, factory, plant');
+        setLocation('Tamil Nadu');
+        setCategory('Regional Business');
+        break;
       case 'ALL':
         setEntity('Tata Motors, NVIDIA, Tesla, Apple, Microsoft');
         setKeywords('EV, AI, GPU, tech, revenue');
+        setLocation('Global');
         setCategory('All Sectors');
         break;
       case 'TECH':
         setEntity('NVIDIA, Apple, Microsoft');
         setKeywords('AI, GPU, cloud, chip, revenue');
+        setLocation('Global');
         setCategory('Technology');
         break;
       case 'AUTO':
         setEntity('Tata Motors, Tesla');
         setKeywords('EV, electric vehicle, battery, sales');
+        setLocation('India');
         setCategory('Automotive');
         break;
       default:
         break;
     }
+  };
+
+  const handleStateSelect = (stateName) => {
+    setLocation(stateName);
   };
 
   return (
@@ -63,7 +82,21 @@ export default function CollectionForm({ onCollect, loading }) {
 
         {/* LinkedIn-style Quick Preset Pills */}
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          <span className="text-slate-500 mr-1 text-[11px] font-sans">Quick Presets:</span>
+          <span className="text-slate-500 mr-1 text-[11px] font-sans">Presets:</span>
+          <button
+            type="button"
+            onClick={() => handlePreset('INDIA')}
+            className="px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold rounded-full border border-amber-300 transition-colors cursor-pointer"
+          >
+            🇮🇳 Indian Companies
+          </button>
+          <button
+            type="button"
+            onClick={() => handlePreset('STATES')}
+            className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold rounded-full border border-emerald-300 transition-colors cursor-pointer"
+          >
+            📍 State Discovery
+          </button>
           <button
             type="button"
             onClick={() => handlePreset('ALL')}
@@ -77,13 +110,6 @@ export default function CollectionForm({ onCollect, loading }) {
             className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-full border border-slate-300 transition-colors cursor-pointer"
           >
             Tech Giants
-          </button>
-          <button
-            type="button"
-            onClick={() => handlePreset('AUTO')}
-            className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-full border border-slate-300 transition-colors cursor-pointer"
-          >
-            Automotive
           </button>
         </div>
       </div>
@@ -100,7 +126,7 @@ export default function CollectionForm({ onCollect, loading }) {
                 type="text"
                 value={entity}
                 onChange={(e) => setEntity(e.target.value)}
-                placeholder="e.g. Tata Motors, NVIDIA, Tesla, Apple, Microsoft"
+                placeholder="e.g. Vee Technologies, Tata Motors, Infosys"
                 className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-linkedin-blue/20 focus:border-linkedin-blue bg-white font-medium text-slate-900 transition-colors"
                 required
               />
@@ -117,7 +143,7 @@ export default function CollectionForm({ onCollect, loading }) {
               type="text"
               value={keywords}
               onChange={(e) => setKeywords(e.target.value)}
-              placeholder="e.g. EV, AI, GPU"
+              placeholder="e.g. revenue, expansion, AI"
               className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-linkedin-blue/20 focus:border-linkedin-blue bg-white font-medium text-slate-900 transition-colors"
             />
           </div>
@@ -125,15 +151,30 @@ export default function CollectionForm({ onCollect, loading }) {
           {/* Category / Region */}
           <div className="lg:col-span-1">
             <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1 font-sans">
-              Region / Scope
+              State / Region
             </label>
             <input
               type="text"
+              list="indian-states-list"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g. Global"
+              placeholder="e.g. Tamil Nadu, Karnataka"
               className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-linkedin-blue/20 focus:border-linkedin-blue bg-white font-medium text-slate-900 transition-colors"
             />
+            <datalist id="indian-states-list">
+              <option value="India" />
+              <option value="Tamil Nadu" />
+              <option value="Karnataka" />
+              <option value="Maharashtra" />
+              <option value="Telangana" />
+              <option value="Gujarat" />
+              <option value="Delhi NCR" />
+              <option value="Kerala" />
+              <option value="Uttar Pradesh" />
+              <option value="West Bengal" />
+              <option value="Andhra Pradesh" />
+              <option value="Global" />
+            </datalist>
           </div>
 
           {/* Recency Dropdown */}

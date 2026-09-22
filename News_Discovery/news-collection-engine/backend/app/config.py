@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     # MongoDB Configuration (Primary Article Document Store)
     MONGODB_URL: Optional[str] = None
     MONGODB_DB_NAME: str = "news_discovery"
-    ARTICLE_STORAGE_BACKEND: str = "both"  # "both", "mongodb", "relational"
+    ARTICLE_STORAGE_BACKEND: str = "relational"  # "relational", "mongodb", "both"
 
     # Redis Cache
     REDIS_URL: Optional[str] = None
